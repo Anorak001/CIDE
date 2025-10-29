@@ -26,6 +26,13 @@ app = Flask(__name__)
 import os
 app.secret_key = os.environ.get('SECRET_KEY', 'cide-secret-key-change-in-production')
 
+# Admin credentials (in production, use database with hashed passwords)
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+# In-memory storage for analyses (replace with database in production)
+analyses_db = []
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'py', 'java', 'js', 'cpp', 'c', 'h', 'txt'}
@@ -166,6 +173,19 @@ def analyze():
         # Store analysis result in session for report generation
         session['last_analysis'] = result
         
+        # Store in analyses database
+        analysis_record = {
+            'id': len(analyses_db) + 1,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'files': f"{file1.filename}, {file2.filename}",
+            'language': language,
+            'mode': mode,
+            'similarity': result.get('weighted_percentage', result.get('similarity_percentage', 0)),
+            'file_count': 2,
+            'result': result
+        }
+        analyses_db.append(analysis_record)
+        
         return jsonify(result)
     
     except UnicodeDecodeError:
@@ -215,6 +235,22 @@ def batch():
         
         # Store in session
         session['last_batch_analysis'] = result
+        
+        # Store batch analysis in database
+        file_names = ', '.join([f['name'] for f in files_data])
+        avg_similarity = sum([r['similarity'] for r in result['results']]) / len(result['results']) if result['results'] else 0
+        
+        analysis_record = {
+            'id': len(analyses_db) + 1,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'files': file_names,
+            'language': language,
+            'mode': mode,
+            'similarity': avg_similarity,
+            'file_count': len(files_data),
+            'result': result
+        }
+        analyses_db.append(analysis_record)
         
         return jsonify(result)
     
@@ -280,6 +316,155 @@ def health():
         'status': 'healthy',
         'version': '2.0.0',
         'features': ['basic', 'ast', 'hybrid', 'plagiarism_detection', 'report_generation']
+    })
+
+
+# ==================== Admin Routes ====================
+
+def require_admin():
+    """Check if user is logged in as admin."""
+    if not session.get('admin_logged_in'):
+        return False
+    return True
+
+
+@app.route('/admin')
+def admin_dashboard():
+    """Admin dashboard page."""
+    if not require_admin():
+        return render_template('admin_login.html')
+    
+    return render_template('admin.html')
+
+
+@app.route('/admin/login', methods=['POST'])
+def admin_login():
+    """Admin login endpoint."""
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        session['admin_logged_in'] = True
+        return jsonify({'success': True, 'message': 'Login successful'})
+    else:
+        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Admin logout."""
+    session.pop('admin_logged_in', None)
+    return render_template('admin_login.html', message='Logged out successfully')
+
+
+@app.route('/api/admin/analyses')
+def get_analyses():
+    """Get all analyses (admin only)."""
+    if not require_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Return analyses without the full result details (too large)
+    simplified_analyses = [
+        {
+            'id': a['id'],
+            'timestamp': a['timestamp'],
+            'files': a['files'],
+            'language': a['language'],
+            'mode': a['mode'],
+            'similarity': a['similarity'],
+            'file_count': a['file_count']
+        }
+        for a in analyses_db
+    ]
+    
+    return jsonify({
+        'success': True,
+        'analyses': simplified_analyses
+    })
+
+
+@app.route('/api/admin/analysis/<int:analysis_id>')
+def get_analysis_detail(analysis_id):
+    """Get detailed analysis result (admin only)."""
+    if not require_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    analysis = next((a for a in analyses_db if a['id'] == analysis_id), None)
+    
+    if not analysis:
+        return jsonify({'error': 'Analysis not found'}), 404
+    
+    return jsonify({
+        'success': True,
+        'analysis': analysis
+    })
+
+
+@app.route('/api/admin/analysis/<int:analysis_id>', methods=['DELETE'])
+def delete_analysis(analysis_id):
+    """Delete an analysis (admin only)."""
+    if not require_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    global analyses_db
+    analyses_db = [a for a in analyses_db if a['id'] != analysis_id]
+    
+    return jsonify({
+        'success': True,
+        'message': 'Analysis deleted'
+    })
+
+
+@app.route('/api/admin/stats')
+def get_admin_stats():
+    """Get statistics for admin dashboard."""
+    if not require_admin():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    total_analyses = len(analyses_db)
+    
+    if total_analyses == 0:
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_analyses': 0,
+                'avg_similarity': 0,
+                'high_risk_count': 0,
+                'total_files': 0,
+                'language_distribution': {},
+                'trend_data': []
+            }
+        })
+    
+    # Calculate statistics
+    avg_similarity = sum(a['similarity'] for a in analyses_db) / total_analyses
+    high_risk_count = sum(1 for a in analyses_db if a['similarity'] >= 80)
+    total_files = sum(a['file_count'] for a in analyses_db)
+    
+    # Language distribution
+    lang_dist = {}
+    for a in analyses_db:
+        lang = a['language']
+        lang_dist[lang] = lang_dist.get(lang, 0) + 1
+    
+    # Trend data (last 7 days)
+    from collections import defaultdict
+    trend_data = defaultdict(int)
+    
+    for a in analyses_db:
+        date = a['timestamp'].split(' ')[0]  # Get date part
+        trend_data[date] += 1
+    
+    return jsonify({
+        'success': True,
+        'stats': {
+            'total_analyses': total_analyses,
+            'avg_similarity': round(avg_similarity, 1),
+            'high_risk_count': high_risk_count,
+            'total_files': total_files,
+            'language_distribution': lang_dist,
+            'trend_data': dict(trend_data)
+        }
     })
 
 

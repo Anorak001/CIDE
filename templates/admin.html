@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - CIDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+        .table-row:hover {
+            background-color: #f3f4f6;
+        }
+        .badge-low { background-color: #d1fae5; color: #065f46; }
+        .badge-medium { background-color: #fed7aa; color: #9a3412; }
+        .badge-high { background-color: #fecaca; color: #991b1b; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-shield-alt text-3xl"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold">CIDE Admin Dashboard</h1>
+                        <p class="text-sm text-blue-100">Code Integrity Detection Engine</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition">
+                        <i class="fas fa-home mr-2"></i>Main App
+                    </a>
+                    <button onclick="logout()" class="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-6 py-8">
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Analyses -->
+            <div class="stat-card bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Total Analyses</p>
+                        <h3 class="text-3xl font-bold text-gray-800 mt-2" id="totalAnalyses">0</h3>
+                        <p class="text-sm text-green-600 mt-2">
+                            <i class="fas fa-arrow-up"></i> <span id="analysesGrowth">0%</span> from last week
+                        </p>
+                    </div>
+                    <div class="bg-blue-100 p-4 rounded-full">
+                        <i class="fas fa-chart-line text-blue-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Average Similarity -->
+            <div class="stat-card bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Avg Similarity</p>
+                        <h3 class="text-3xl font-bold text-gray-800 mt-2" id="avgSimilarity">0%</h3>
+                        <p class="text-sm text-gray-600 mt-2">
+                            <span id="similarityTrend">Stable</span>
+                        </p>
+                    </div>
+                    <div class="bg-purple-100 p-4 rounded-full">
+                        <i class="fas fa-percentage text-purple-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- High Risk Detections -->
+            <div class="stat-card bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">High Risk (>80%)</p>
+                        <h3 class="text-3xl font-bold text-red-600 mt-2" id="highRisk">0</h3>
+                        <p class="text-sm text-gray-600 mt-2">
+                            Potential plagiarism
+                        </p>
+                    </div>
+                    <div class="bg-red-100 p-4 rounded-full">
+                        <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Files Analyzed -->
+            <div class="stat-card bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm font-medium">Files Analyzed</p>
+                        <h3 class="text-3xl font-bold text-gray-800 mt-2" id="totalFiles">0</h3>
+                        <p class="text-sm text-gray-600 mt-2">
+                            Across all analyses
+                        </p>
+                    </div>
+                    <div class="bg-green-100 p-4 rounded-full">
+                        <i class="fas fa-file-code text-green-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Trend Chart -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-area mr-2 text-blue-600"></i>Analysis Trend (Last 7 Days)
+                </h3>
+                <canvas id="trendChart" height="200"></canvas>
+            </div>
+
+            <!-- Language Distribution -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-code mr-2 text-purple-600"></i>Language Distribution
+                </h3>
+                <canvas id="languageChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-filter mr-2"></i>Filters
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                    <input type="text" id="searchInput" placeholder="Search by filename..." 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Language</label>
+                    <select id="languageFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Languages</option>
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="cpp">C++</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Risk Level</label>
+                    <select id="riskFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Levels</option>
+                        <option value="low">Low (0-50%)</option>
+                        <option value="medium">Medium (50-80%)</option>
+                        <option value="high">High (80-100%)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                    <select id="dateFilter" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="week">Last 7 Days</option>
+                        <option value="month">Last 30 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-4 flex space-x-3">
+                <button onclick="applyFilters()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-search mr-2"></i>Apply Filters
+                </button>
+                <button onclick="resetFilters()" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">
+                    <i class="fas fa-redo mr-2"></i>Reset
+                </button>
+                <button onclick="exportData()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition ml-auto">
+                    <i class="fas fa-download mr-2"></i>Export CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Analysis History Table -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-gray-800">
+                        <i class="fas fa-history mr-2"></i>Analysis History
+                    </h3>
+                    <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('timestamp')">
+                                Timestamp <i class="fas fa-sort ml-1"></i>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('files')">
+                                Files <i class="fas fa-sort ml-1"></i>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('language')">
+                                Language <i class="fas fa-sort ml-1"></i>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('mode')">
+                                Mode <i class="fas fa-sort ml-1"></i>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onclick="sortTable('similarity')">
+                                Similarity <i class="fas fa-sort ml-1"></i>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Risk Level
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="analysisTable" class="bg-white divide-y divide-gray-200">
+                        <!-- Rows will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+                <div class="text-sm text-gray-700">
+                    Showing <span id="showingStart">0</span> to <span id="showingEnd">0</span> of <span id="totalRecords">0</span> results
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="changePage(-1)" class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="px-4 py-2 bg-blue-600 text-white rounded-lg">
+                        Page <span id="currentPage">1</span>
+                    </span>
+                    <button onclick="changePage(1)" class="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let analyses = [];
+        let filteredAnalyses = [];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let sortColumn = 'timestamp';
+        let sortDirection = 'desc';
+        let trendChart = null;
+        let languageChart = null;
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAnalyses();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('searchInput').addEventListener('input', applyFilters);
+            document.getElementById('languageFilter').addEventListener('change', applyFilters);
+            document.getElementById('riskFilter').addEventListener('change', applyFilters);
+            document.getElementById('dateFilter').addEventListener('change', applyFilters);
+        }
+
+        async function loadAnalyses() {
+            try {
+                const response = await fetch('/api/admin/analyses');
+                const data = await response.json();
+                
+                if (data.success) {
+                    analyses = data.analyses;
+                    filteredAnalyses = analyses;
+                    updateStatistics();
+                    updateCharts();
+                    renderTable();
+                }
+            } catch (error) {
+                console.error('Error loading analyses:', error);
+                showNotification('Error loading data', 'error');
+            }
+        }
+
+        function updateStatistics() {
+            // Total analyses
+            document.getElementById('totalAnalyses').textContent = analyses.length;
+            
+            // Calculate average similarity
+            const avgSim = analyses.length > 0 
+                ? (analyses.reduce((sum, a) => sum + a.similarity, 0) / analyses.length)
+                : 0;
+            document.getElementById('avgSimilarity').textContent = avgSim.toFixed(1) + '%';
+            
+            // High risk count
+            const highRisk = analyses.filter(a => a.similarity >= 80).length;
+            document.getElementById('highRisk').textContent = highRisk;
+            
+            // Total files
+            const totalFiles = analyses.reduce((sum, a) => sum + (a.file_count || 2), 0);
+            document.getElementById('totalFiles').textContent = totalFiles;
+            
+            // Growth calculation (mock for now)
+            const today = new Date();
+            const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const recentAnalyses = analyses.filter(a => new Date(a.timestamp) > lastWeek);
+            const growth = analyses.length > 0 
+                ? ((recentAnalyses.length / analyses.length) * 100)
+                : 0;
+            document.getElementById('analysesGrowth').textContent = growth.toFixed(1) + '%';
+        }
+
+        function updateCharts() {
+            // Trend chart (last 7 days)
+            const last7Days = [];
+            const today = new Date();
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                last7Days.push({
+                    date: date.toISOString().split('T')[0],
+                    count: 0
+                });
+            }
+            
+            analyses.forEach(a => {
+                const date = a.timestamp.split(' ')[0];
+                const day = last7Days.find(d => d.date === date);
+                if (day) day.count++;
+            });
+            
+            const trendCtx = document.getElementById('trendChart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(trendCtx, {
+                type: 'line',
+                data: {
+                    labels: last7Days.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                    datasets: [{
+                        label: 'Analyses',
+                        data: last7Days.map(d => d.count),
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            });
+            
+            // Language distribution
+            const langCounts = {};
+            analyses.forEach(a => {
+                langCounts[a.language] = (langCounts[a.language] || 0) + 1;
+            });
+            
+            const langCtx = document.getElementById('languageChart').getContext('2d');
+            if (languageChart) languageChart.destroy();
+            languageChart = new Chart(langCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(langCounts),
+                    datasets: [{
+                        data: Object.values(langCounts),
+                        backgroundColor: [
+                            'rgb(59, 130, 246)',
+                            'rgb(168, 85, 247)',
+                            'rgb(34, 197, 94)',
+                            'rgb(251, 146, 60)',
+                            'rgb(239, 68, 68)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+
+        function renderTable() {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = filteredAnalyses.slice(start, end);
+            
+            const tbody = document.getElementById('analysisTable');
+            tbody.innerHTML = '';
+            
+            pageData.forEach((analysis, index) => {
+                const row = document.createElement('tr');
+                row.className = 'table-row';
+                
+                const riskLevel = analysis.similarity >= 80 ? 'high' : (analysis.similarity >= 50 ? 'medium' : 'low');
+                const riskText = riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1);
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${analysis.timestamp}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">${analysis.files}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            ${analysis.language}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${analysis.mode}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${analysis.similarity.toFixed(1)}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-medium badge-${riskLevel}">
+                            ${riskText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <button onclick="viewDetails(${analysis.id})" class="text-blue-600 hover:text-blue-900 mr-3">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button onclick="deleteAnalysis(${analysis.id})" class="text-red-600 hover:text-red-900">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Update pagination info
+            document.getElementById('showingStart').textContent = filteredAnalyses.length > 0 ? start + 1 : 0;
+            document.getElementById('showingEnd').textContent = Math.min(end, filteredAnalyses.length);
+            document.getElementById('totalRecords').textContent = filteredAnalyses.length;
+            document.getElementById('currentPage').textContent = currentPage;
+        }
+
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const language = document.getElementById('languageFilter').value;
+            const risk = document.getElementById('riskFilter').value;
+            const dateRange = document.getElementById('dateFilter').value;
+            
+            filteredAnalyses = analyses.filter(a => {
+                // Search filter
+                if (search && !a.files.toLowerCase().includes(search)) return false;
+                
+                // Language filter
+                if (language && a.language !== language) return false;
+                
+                // Risk filter
+                if (risk) {
+                    if (risk === 'low' && a.similarity >= 50) return false;
+                    if (risk === 'medium' && (a.similarity < 50 || a.similarity >= 80)) return false;
+                    if (risk === 'high' && a.similarity < 80) return false;
+                }
+                
+                // Date filter
+                if (dateRange !== 'all') {
+                    const analysisDate = new Date(a.timestamp);
+                    const today = new Date();
+                    const diffDays = Math.floor((today - analysisDate) / (1000 * 60 * 60 * 24));
+                    
+                    if (dateRange === 'today' && diffDays > 0) return false;
+                    if (dateRange === 'week' && diffDays > 7) return false;
+                    if (dateRange === 'month' && diffDays > 30) return false;
+                }
+                
+                return true;
+            });
+            
+            currentPage = 1;
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('languageFilter').value = '';
+            document.getElementById('riskFilter').value = '';
+            document.getElementById('dateFilter').value = 'all';
+            applyFilters();
+        }
+
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'desc';
+            }
+            
+            filteredAnalyses.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                
+                if (typeof valA === 'string') {
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                }
+                
+                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+            
+            renderTable();
+        }
+
+        function changePage(delta) {
+            const maxPage = Math.ceil(filteredAnalyses.length / itemsPerPage);
+            currentPage = Math.max(1, Math.min(maxPage, currentPage + delta));
+            renderTable();
+        }
+
+        function viewDetails(id) {
+            window.location.href = `/admin/analysis/${id}`;
+        }
+
+        async function deleteAnalysis(id) {
+            if (!confirm('Are you sure you want to delete this analysis?')) return;
+            
+            try {
+                const response = await fetch(`/api/admin/analysis/${id}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Analysis deleted successfully', 'success');
+                    loadAnalyses();
+                } else {
+                    showNotification('Error deleting analysis', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Error deleting analysis', 'error');
+            }
+        }
+
+        function refreshData() {
+            showNotification('Refreshing data...', 'info');
+            loadAnalyses();
+        }
+
+        function exportData() {
+            const csv = generateCSV(filteredAnalyses);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cide_analyses_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showNotification('Export successful', 'success');
+        }
+
+        function generateCSV(data) {
+            const headers = ['Timestamp', 'Files', 'Language', 'Mode', 'Similarity', 'Risk Level'];
+            const rows = data.map(a => {
+                const risk = a.similarity >= 80 ? 'High' : (a.similarity >= 50 ? 'Medium' : 'Low');
+                return [a.timestamp, a.files, a.language, a.mode, a.similarity.toFixed(1) + '%', risk];
+            });
+            
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                window.location.href = '/admin/logout';
+            }
+        }
+
+        function showNotification(message, type) {
+            // Simple notification - could be enhanced with toast library
+            alert(message);
+        }
+    </script>
+</body>
+</html>

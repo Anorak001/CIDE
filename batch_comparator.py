@@ -2,21 +2,27 @@
 Batch Comparison Module
 =======================
 Process multiple code files and generate comparison matrices.
+Supports both full comparison and MinHash-accelerated mode.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from code_similarity import CodeSimilarityAnalyzer
 from ast_analyzer import HybridSimilarityAnalyzer
+from minhash import FastSimilarityDetector
 import itertools
 
 
 class BatchComparator:
     """Compare multiple code files against each other."""
     
-    def __init__(self, mode='hybrid'):
+    def __init__(self, mode='hybrid', use_minhash=False):
         self.mode = mode
+        self.use_minhash = use_minhash
         self.basic_analyzer = CodeSimilarityAnalyzer()
         self.hybrid_analyzer = HybridSimilarityAnalyzer()
+        
+        # MinHash detector (initialized when needed)
+        self.minhash_detector = None
     
     def compare_all_pairs(self, files: List[Dict[str, str]], language='python') -> Dict[str, Any]:
         """
@@ -119,6 +125,157 @@ class BatchComparator:
             },
             'file_rankings': file_avg_similarities,
             'files': [{'name': f['name'], 'lines': len(f['content'].splitlines())} for f in files]
+        }
+    
+    def compare_all_pairs_optimized(self, files: List[Dict[str, str]], 
+                                    language='python',
+                                    minhash_threshold=0.5) -> Dict[str, Any]:
+        """
+        Optimized comparison using MinHash for candidate filtering.
+        Much faster for large batches (10+ files).
+        
+        Args:
+            files: List of dicts with 'name' and 'content' keys
+            language: Programming language of the files
+            minhash_threshold: MinHash similarity threshold for filtering candidates
+            
+        Returns:
+            Dictionary containing comparison matrix and summary statistics
+        """
+        n = len(files)
+        
+        # Initialize MinHash detector
+        detector = FastSimilarityDetector(
+            num_hashes=128,
+            num_bands=16,
+            similarity_threshold=minhash_threshold
+        )
+        
+        # Add all files to MinHash index
+        file_ids = {}
+        for i, file in enumerate(files):
+            doc_id = detector.add_document(file['content'], file['name'])
+            file_ids[i] = doc_id
+        
+        # Get candidate pairs using MinHash
+        candidate_pairs = detector.find_all_similar_pairs(min_similarity=minhash_threshold)
+        
+        # Create reverse mapping
+        id_to_index = {doc_id: idx for idx, doc_id in file_ids.items()}
+        
+        # Initialize matrix with zeros
+        matrix = [[0.0 for _ in range(n)] for _ in range(n)]
+        comparisons = []
+        
+        # Perform detailed analysis only on candidate pairs
+        for doc1_id, doc2_id, minhash_sim in candidate_pairs:
+            i = id_to_index[doc1_id]
+            j = id_to_index[doc2_id]
+            
+            file1 = files[i]
+            file2 = files[j]
+            
+            # Perform detailed comparison
+            if self.mode == 'hybrid' and language == 'python':
+                result = self.hybrid_analyzer.analyze(file1['content'], file2['content'])
+                similarity = result['weighted_score']
+                
+                comparison = {
+                    'file1': file1['name'],
+                    'file2': file2['name'],
+                    'similarity': similarity,
+                    'percentage': f"{similarity * 100:.1f}%",
+                    'structure_similarity': result['structure_similarity'],
+                    'identical_structure': result['identical_structure'],
+                    'minhash_estimate': minhash_sim
+                }
+            else:
+                result = self.basic_analyzer.analyze(
+                    file1['content'], 
+                    file2['content'], 
+                    mode='basic', 
+                    language=language
+                )
+                similarity = result['similarity_score']
+                
+                comparison = {
+                    'file1': file1['name'],
+                    'file2': file2['name'],
+                    'similarity': similarity,
+                    'percentage': result['similarity_percentage'],
+                    'minhash_estimate': minhash_sim
+                }
+            
+            # Store in matrix (symmetric)
+            matrix[i][j] = similarity
+            matrix[j][i] = similarity
+            
+            comparisons.append(comparison)
+        
+        # Set diagonal to 1.0
+        for i in range(n):
+            matrix[i][i] = 1.0
+        
+        # Calculate statistics
+        similarities = [comp['similarity'] for comp in comparisons]
+        
+        if similarities:
+            avg_similarity = sum(similarities) / len(similarities)
+            max_similarity = max(similarities)
+            min_similarity = min(similarities)
+            most_similar = max(comparisons, key=lambda x: x['similarity'])
+        else:
+            avg_similarity = 0
+            max_similarity = 0
+            min_similarity = 0
+            most_similar = None
+        
+        # File rankings
+        file_avg_similarities = []
+        for i in range(n):
+            # Calculate average from non-zero entries
+            non_zero_similarities = [matrix[i][j] for j in range(n) if i != j and matrix[i][j] > 0]
+            avg = sum(non_zero_similarities) / len(non_zero_similarities) if non_zero_similarities else 0
+            
+            file_avg_similarities.append({
+                'file': files[i]['name'],
+                'average_similarity': avg,
+                'percentage': f"{avg * 100:.1f}%"
+            })
+        
+        file_avg_similarities.sort(key=lambda x: x['average_similarity'], reverse=True)
+        
+        # Calculate performance metrics
+        total_possible_pairs = n * (n - 1) // 2
+        comparisons_saved = total_possible_pairs - len(comparisons)
+        efficiency = (comparisons_saved / total_possible_pairs * 100) if total_possible_pairs > 0 else 0
+        
+        return {
+            'mode': self.mode,
+            'language': language,
+            'file_count': n,
+            'comparison_count': len(comparisons),
+            'total_possible_pairs': total_possible_pairs,
+            'comparisons_saved': comparisons_saved,
+            'efficiency_percentage': f"{efficiency:.1f}%",
+            'matrix': matrix,
+            'comparisons': comparisons,
+            'statistics': {
+                'average_similarity': avg_similarity,
+                'average_percentage': f"{avg_similarity * 100:.1f}%",
+                'max_similarity': max_similarity,
+                'max_percentage': f"{max_similarity * 100:.1f}%",
+                'min_similarity': min_similarity,
+                'min_percentage': f"{min_similarity * 100:.1f}%",
+                'most_similar_pair': most_similar
+            },
+            'file_rankings': file_avg_similarities,
+            'files': [{'name': f['name'], 'lines': len(f['content'].splitlines())} for f in files],
+            'optimization': {
+                'minhash_enabled': True,
+                'threshold': minhash_threshold,
+                'speedup': f"{total_possible_pairs / max(len(comparisons), 1):.1f}x"
+            }
         }
     
     def find_clusters(self, files: List[Dict[str, str]], threshold=0.75, language='python') -> Dict[str, Any]:
