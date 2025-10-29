@@ -21,7 +21,11 @@ from report_generator import generate_report
 from batch_comparator import BatchComparator
 
 app = Flask(__name__)
-app.secret_key = 'cide-secret-key-change-in-production'
+
+# Use environment variable for secret key in production
+import os
+app.secret_key = os.environ.get('SECRET_KEY', 'cide-secret-key-change-in-production')
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'py', 'java', 'js', 'cpp', 'c', 'h', 'txt'}
@@ -280,10 +284,21 @@ def health():
 
 
 if __name__ == '__main__':
-    print("=" * 70)
-    print("🚀 CIDE - Code Integrity Detection Engine")
-    print("=" * 70)
-    print("Starting web server...")
-    print("Access the application at: http://localhost:5000")
-    print("=" * 70)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Check if running in production
+    is_production = os.environ.get('FLASK_ENV') == 'production'
+    port = int(os.environ.get('PORT', 5000))
+    
+    if not is_production:
+        print("=" * 70)
+        print("🚀 CIDE - Code Integrity Detection Engine")
+        print("=" * 70)
+        print("Starting web server...")
+        print("Access the application at: http://localhost:5000")
+        print("=" * 70)
+    
+    # Run with appropriate settings
+    app.run(
+        debug=not is_production,
+        host='0.0.0.0',
+        port=port
+    )

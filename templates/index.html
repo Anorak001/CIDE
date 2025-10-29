@@ -381,8 +381,13 @@
         function displayChart(data) {
             const ctx = document.getElementById('similarityChart').getContext('2d');
             
-            if (window.similarityChart) {
-                window.similarityChart.destroy();
+            // Safely destroy existing chart
+            if (window.similarityChart && typeof window.similarityChart.destroy === 'function') {
+                try {
+                    window.similarityChart.destroy();
+                } catch (e) {
+                    console.warn('Error destroying chart:', e);
+                }
             }
             
             if (data.mode === 'hybrid') {
